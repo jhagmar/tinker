@@ -2,10 +2,11 @@
 
 use std::ffi::OsString;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use tinker_catalog::{ProblemId, ProblemIdError, Selector, entries, verify};
 
+use crate::codegen::write_http_js;
 use crate::compile::CatalogCompiler;
 use crate::sampler::{SplitMix64, VERIFY_SEED};
 use crate::version;
@@ -15,6 +16,7 @@ Usage: tinker [options] <command>
 
 Commands:
   verify <all|id[,id...]> <n>  Sample n instances per selected problem
+  codegen [path]               Write generated/tinker-http.js (or path)
 
 Options:
   -h, --help            Show this help
@@ -59,6 +61,9 @@ enum Action {
         selector: Selector,
         n: u32,
         color: ColorMode,
+    },
+    Codegen {
+        path: PathBuf,
     },
 }
 
@@ -109,6 +114,16 @@ pub fn run(
                 }
             }
         }
+        Ok(Action::Codegen { path }) => match write_http_js(&path) {
+            Ok(()) => {
+                let _ = writeln!(stdout, "wrote {}", path.display());
+                0
+            }
+            Err(e) => {
+                let _ = writeln!(stderr, "codegen failed: {e}");
+                1
+            }
+        },
     }
 }
 
@@ -159,6 +174,7 @@ fn parse(args: &[OsString]) -> Result<Action, ParseErr> {
     }
     match positionals[0] {
         "verify" => parse_verify(&positionals[1..], color),
+        "codegen" => parse_codegen(&positionals[1..]),
         other => Err(ParseErr::Usage(format!("unknown command {other}"))),
     }
 }
@@ -223,6 +239,17 @@ fn parse_n(raw: &str) -> Result<u32, ParseErr> {
         return Err(ParseErr::Usage("n must be at least 1".to_owned()));
     }
     Ok(n)
+}
+
+fn parse_codegen(rest: &[&str]) -> Result<Action, ParseErr> {
+    let path = match rest {
+        [] => PathBuf::from(tinker_protocol::GENERATED_DIR).join(tinker_protocol::HTTP_JS_FILE),
+        [p] => PathBuf::from(*p),
+        _ => {
+            return Err(ParseErr::Usage("codegen takes at most one path".to_owned()));
+        }
+    };
+    Ok(Action::Codegen { path })
 }
 
 #[cfg(test)]
@@ -293,6 +320,7 @@ mod tests {
         let (c, out, _) = run_args(&["tinker", "-h"], &OkCompiler, false);
         assert_eq!(c, 0);
         assert!(out.contains("verify"));
+        assert!(out.contains("codegen"));
         let (c, out, _) = run_args(&["tinker", "--version"], &OkCompiler, false);
         assert_eq!(c, 0);
         assert_eq!(out.trim(), version());
@@ -334,6 +362,7 @@ mod tests {
                 &["tinker", "--color=rainbow", "verify", "all", "1"],
                 "invalid --color",
             ),
+            (&["tinker", "codegen", "a", "b"], "at most one path"),
         ];
         for (args, needle) in cases {
             let (c, _, err) = run_args(args, &OkCompiler, false);
@@ -402,5 +431,49 @@ mod tests {
         let (c, _, err) = run_args(&["tinker", "verify", "all", "1"], &FailCompiler, false);
         assert_eq!(c, 1);
         assert!(err.contains("catalog compile failed"));
+    }
+
+    #[test]
+    fn codegen_writes_and_reports_io_errors() {
+        use std::fs;
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("tinker-cli-codegen-{}-{nanos}", std::process::id()));
+        fs::create_dir_all(&root).expect("scratch");
+        let file = root.join("tinker-http.js");
+        let path = file.to_str().expect("utf8 path");
+        let (c, out, err) = run_args(&["tinker", "codegen", path], &FailCompiler, false);
+        assert_eq!(c, 0, "err={err}");
+        assert!(out.contains("wrote"));
+        assert!(
+            fs::read_to_string(&file)
+                .expect("js")
+                .contains("export function login(")
+        );
+
+        let dir = root.to_str().expect("utf8 dir");
+        let (c, _, err) = run_args(&["tinker", "codegen", dir], &OkCompiler, false);
+        assert_eq!(c, 1);
+        assert!(err.contains("codegen failed"));
+    }
+
+    #[test]
+    fn codegen_default_path() {
+        use std::fs;
+
+        let path =
+            PathBuf::from(tinker_protocol::GENERATED_DIR).join(tinker_protocol::HTTP_JS_FILE);
+        let _ = fs::remove_file(&path);
+        let (c, out, err) = run_args(&["tinker", "codegen"], &OkCompiler, false);
+        assert_eq!(c, 0, "err={err}");
+        assert!(out.contains(tinker_protocol::HTTP_JS_FILE));
+        assert!(path.is_file());
+        let _ = fs::remove_file(&path);
+        let _ = fs::remove_dir(tinker_protocol::GENERATED_DIR);
     }
 }

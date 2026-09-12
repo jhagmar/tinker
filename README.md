@@ -20,12 +20,13 @@ git submodule update --init --recursive
 cd tinker-backend
 cargo test --workspace --locked
 python3 -m unittest discover -s languages/python -v
+node --test scripts/test-tinker-http.mjs
 docker compose -f compose/docker-compose.yml config
 ```
 
-`cargo test --workspace --locked` is the default Rust test command. Line coverage on measured crates is 100%. Python 3.12 or later: `python3 -m unittest discover -s languages/python -v` from `tinker-backend/`.
+`cargo test --workspace --locked` is the default Rust test command. Line coverage on measured crates is 100%. Python 3.12 or later: `python3 -m unittest discover -s languages/python -v` from `tinker-backend/`. Node 18 or later: `node --test scripts/test-tinker-http.mjs` from `tinker-backend/` imports `generated/tinker-http.js`.
 
-From `tinker-backend/`, `cargo run -p tinker -- verify all 100` compiles `catalog/` and samples every problem. Set `TINKER_CATALOG_DIR` when the process working directory is not the workspace root.
+From `tinker-backend/`, `cargo run -p tinker -- verify all 100` compiles `catalog/` and samples every problem. Set `TINKER_CATALOG_DIR` when the process working directory is not the workspace root. `cargo run -p tinker -- codegen generated/tinker-http.js` writes the HTTP JavaScript helpers.
 
 ## Layout
 
