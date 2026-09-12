@@ -51,6 +51,8 @@ jobs:
         run: cargo deny check
       - name: Test
         run: cargo test --workspace --locked
+      - name: Python kit
+        run: python3 -m unittest discover -s languages/python -v
       - name: Coverage
         run: cargo llvm-cov --workspace --locked --fail-under-lines 100 --lcov --output-path lcov.info --ignore-filename-regex '/main\.rs$'
       - name: Compose

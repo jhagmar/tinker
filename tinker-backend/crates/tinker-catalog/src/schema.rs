@@ -1,5 +1,7 @@
 //! JSON Schema for catalog instance and answer objects.
 
+use crate::json::write_json_string;
+
 /// JSON Schema document for a catalog type.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Schema {
@@ -73,7 +75,7 @@ impl Schema {
                     if i > 0 {
                         out.push(',');
                     }
-                    push_json_string(out, k);
+                    write_json_string(out, k);
                     out.push(':');
                     v.write_json(out);
                 }
@@ -82,37 +84,12 @@ impl Schema {
                     if i > 0 {
                         out.push(',');
                     }
-                    push_json_string(out, k);
+                    write_json_string(out, k);
                 }
                 out.push_str("],\"additionalProperties\":false}");
             }
         }
     }
-}
-
-fn push_json_string(out: &mut String, s: &str) {
-    out.push('"');
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if (c as u32) < 0x20 => {
-                out.push_str("\\u00");
-                let n = c as u32;
-                out.push(hex_digit(n / 16));
-                out.push(hex_digit(n % 16));
-            }
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-}
-
-fn hex_digit(n: u32) -> char {
-    char::from(b"0123456789abcdef"[n as usize])
 }
 
 #[cfg(test)]

@@ -1,5 +1,6 @@
-//! Problem catalog: trait, JSON Schema, in-process verify, and problem modules.
+//! Problem catalog: trait, JSON Schema, JSON data model, in-process verify, and problem modules.
 
+mod json;
 mod problem;
 mod problem_id;
 mod problems;
@@ -7,9 +8,10 @@ mod sampler;
 mod schema;
 mod verify;
 
+pub use json::{Json, JsonError, JsonInt, MAX_BYTES, MAX_DEPTH, MAX_SAFE_INT};
 pub use problem::{Judgement, Problem, ProblemEntry};
 pub use problem_id::{ProblemId, ProblemIdError};
-pub use problems::entries;
+pub use problems::{IntList, IntSum, Sum, entries};
 pub use sampler::Sampler;
 pub use schema::Schema;
 pub use verify::{Selector, VerifyError, VerifyReport, verify};

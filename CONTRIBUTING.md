@@ -14,6 +14,7 @@ cargo fmt --manifest-path catalog/Cargo.toml -- --check
 cargo clippy --workspace --locked --all-targets -- -D warnings
 cargo clippy --manifest-path catalog/Cargo.toml --locked --all-targets -- -D warnings
 cargo test --workspace --locked
+python3 -m unittest discover -s languages/python -v
 python3 scripts/layering.py
 cargo deny check
 cargo llvm-cov --workspace --locked --fail-under-lines 100 --ignore-filename-regex '/main\.rs$'
