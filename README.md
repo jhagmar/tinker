@@ -24,6 +24,8 @@ docker compose -f compose/docker-compose.yml config
 
 `cargo test --workspace --locked` is the default test command. Line coverage on measured crates is 100%.
 
+From `tinker-backend/`, `cargo run -p tinker -- verify all 100` compiles `catalog/` and samples every problem. Set `TINKER_CATALOG_DIR` when the process working directory is not the workspace root.
+
 ## Layout
 
 | Path | Role |
