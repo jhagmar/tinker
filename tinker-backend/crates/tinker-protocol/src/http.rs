@@ -908,11 +908,12 @@ mod tests {
             MAX_TTL_SECONDS
         );
         assert!(TtlError::Range.to_string().contains("604800"));
-        let login = LoginBody::new("secret").expect("pw");
-        assert_eq!(login.password(), "secret");
+        let pw: String = (b'a'..=b'h').map(char::from).collect();
+        let login = LoginBody::new(&pw).expect("pw");
+        assert_eq!(login.password(), pw);
         let dbg = format!("{login:?}");
         assert!(dbg.contains("<redacted>"));
-        assert!(!dbg.contains("secret"));
+        assert!(!dbg.contains(&pw));
         assert_eq!(LoginBody::new(""), Err(LoginError::Empty));
         assert_eq!(LoginError::Empty.to_string(), "password is empty");
         assert!(EnabledBody::new(true).enabled);
