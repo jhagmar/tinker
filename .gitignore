@@ -8,6 +8,10 @@ target/
 coverage/
 *.lcov
 lcov.info
+*.profraw
+*.profdata
 .nyc_output/
 node_modules/
 dist/
+__pycache__/
+*.py[cod]
