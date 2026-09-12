@@ -31,15 +31,6 @@ The Mixtrapi contract is the `mixtrapi/` submodule.
 3. Do not hand-edit files under `tinker-backend/generated/`.
 4. Fill in the pull request template.
 
-## GitHub
-
-On github.com/jhagmar/tinker, enable:
-
-- Branch protection on `master` with required check `test`
-- CodeQL and Scorecard workflow permissions (read contents, write `security-events` and `id-token` as in the workflow files)
-- Codecov for the repository so the coverage badge resolves
-- Private vulnerability reporting
-
 ## Code of conduct
 
 See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
