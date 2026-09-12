@@ -60,4 +60,19 @@ mod tests {
         assert_eq!(catalog_dir(), "catalog");
         assert_eq!(generated_dir(), "generated");
     }
+
+    #[test]
+    fn login_body_debug_omits_payload() {
+        let pw = std::env::args().next().expect("argv0");
+        assert!(!pw.is_empty());
+        let login = tinker_protocol::LoginBody::new(&pw).expect("pw");
+        assert_eq!(login.password(), pw.as_str());
+        let dbg = format!("{login:?}");
+        assert!(dbg.contains("<redacted>"));
+        assert!(!dbg.contains(&pw));
+        assert_eq!(
+            tinker_protocol::LoginBody::new(&pw[..0]),
+            Err(tinker_protocol::LoginError::Empty)
+        );
+    }
 }
