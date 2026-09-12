@@ -6,6 +6,7 @@ members = [
     "crates/tinker-catalog",
     "crates/tinker-agent",
 ]
+exclude = ["catalog"]
 
 [workspace.package]
 version = "0.1.0"

@@ -1,5 +1,12 @@
 //! Host binary for Tinker workshops.
 
+mod cli;
+mod compile;
+mod sampler;
+
+pub use cli::{ColorMode, run};
+pub use compile::{CargoCompiler, CatalogCompiler, CompileError};
+
 /// Package version from Cargo.toml.
 #[must_use]
 pub fn version() -> &'static str {

@@ -1,0 +1,22 @@
+[workspace]
+resolver = "3"
+
+[package]
+name = "tinker-catalog-bin"
+description = "Fat catalog binary: generate, reference solve, and judge"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "tinker-catalog"
+path = "src/main.rs"
+
+[dependencies]
+tinker-catalog = { path = "../crates/tinker-catalog" }
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"

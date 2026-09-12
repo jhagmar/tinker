@@ -10,17 +10,20 @@ Rust 1.98. The Cargo workspace is `tinker-backend/` so this tree can also hold t
 git submodule update --init --recursive
 cd tinker-backend
 cargo fmt --all -- --check
+cargo fmt --manifest-path catalog/Cargo.toml -- --check
 cargo clippy --workspace --locked --all-targets -- -D warnings
+cargo clippy --manifest-path catalog/Cargo.toml --locked --all-targets -- -D warnings
 cargo test --workspace --locked
 python3 scripts/layering.py
 cargo deny check
-cargo llvm-cov --workspace --locked --fail-under-lines 100
+cargo llvm-cov --workspace --locked --fail-under-lines 100 --ignore-filename-regex '/main\.rs$'
 docker compose -f compose/docker-compose.yml config
+cargo run -p tinker -- verify all 100
 ```
 
 CI runs those commands. Line coverage on measured crates is 100%.
 
-`crates/tinker/src/main.rs` is the process entry: it prints the lib version and exits. Codecov omits that file; review it by reading it. Domain crates (`tinker-protocol`, `tinker-catalog`, `tinker-agent`) have no crates.io dependencies.
+`crates/tinker/src/main.rs` is the process entry: environment, stdout/stderr, and `tinker::run`. Codecov omits that file; review it by reading it. Domain crates (`tinker-protocol`, `tinker-catalog`, `tinker-agent`) have no crates.io dependencies.
 
 The Mixtrapi contract is the `mixtrapi/` submodule.
 
