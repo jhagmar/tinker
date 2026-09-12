@@ -1,5 +1,6 @@
 //! Array of integers → sum.
 
+use crate::json::{Json, JsonError};
 use crate::problem::{Judgement, Problem, ProblemEntry};
 use crate::problem_id::ProblemId;
 use crate::sampler::Sampler;
@@ -72,6 +73,71 @@ impl Problem for IntSum {
     }
 }
 
+impl IntList {
+    /// Encode as `{ "v": [integer, ...] }`.
+    #[must_use]
+    pub fn to_json(&self) -> Json {
+        Json::object(vec![(
+            "v".to_owned(),
+            Json::Array(self.v.iter().copied().map(Json::int).collect()),
+        )])
+        .expect("single key")
+    }
+
+    /// Decode `{ "v": [integer, ...] }`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`JsonError`] when the value is not this object shape or an element is not an `i64`.
+    pub fn from_json(value: &Json) -> Result<Self, JsonError> {
+        let Json::Object(pairs) = value else {
+            return Err(JsonError::ExpectedObject);
+        };
+        let mut found = None;
+        for (k, val) in pairs {
+            if k == "v" {
+                found = Some(val);
+            } else {
+                return Err(JsonError::ExtraField);
+            }
+        }
+        let Some(field) = found else {
+            return Err(JsonError::MissingField);
+        };
+        let Json::Array(items) = field else {
+            return Err(JsonError::ExpectedArray);
+        };
+        let mut v = Vec::with_capacity(items.len());
+        for item in items {
+            let Json::Int(n) = item else {
+                return Err(JsonError::ExpectedInt);
+            };
+            v.push(n.to_i64()?);
+        }
+        Ok(Self { v })
+    }
+}
+
+impl Sum {
+    /// Encode as a JSON integer.
+    #[must_use]
+    pub fn to_json(self) -> Json {
+        Json::int(self.0)
+    }
+
+    /// Decode a JSON integer.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`JsonError`] when the value is not an `i64` integer.
+    pub fn from_json(value: &Json) -> Result<Self, JsonError> {
+        match value {
+            Json::Int(n) => Ok(Self(n.to_i64()?)),
+            _ => Err(JsonError::ExpectedInt),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -116,6 +182,91 @@ mod tests {
             }
             let _ = IntSum::judge(&inst, &IntSum::reference_solve(&inst));
         }
+    }
+
+    #[test]
+    fn json_round_trip_goldens() {
+        use crate::json::Json;
+        let inst: Json = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../languages/goldens/int-sum-instance.json"
+        ))
+        .trim()
+        .parse()
+        .expect("inst");
+        let list = IntList::from_json(&inst).expect("list");
+        assert_eq!(list.v, vec![1, 2, 3]);
+        assert_eq!(
+            list.to_json().to_compact_string().expect("enc"),
+            inst.to_compact_string().expect("enc")
+        );
+        let wide: Json = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../languages/goldens/int-sum-instance-wide.json"
+        ))
+        .trim()
+        .parse()
+        .expect("wide");
+        let list = IntList::from_json(&wide).expect("wide list");
+        assert_eq!(list.v, vec![1, 9_007_199_254_740_992]);
+        assert_eq!(IntSum::reference_solve(&list), Sum(9_007_199_254_740_993));
+        assert_eq!(
+            IntSum::reference_solve(&list)
+                .to_json()
+                .to_compact_string()
+                .expect("ans"),
+            include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../languages/goldens/int-sum-answer-wide.json"
+            ))
+            .trim()
+        );
+        let ans: Json = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../languages/goldens/int-sum-answer.json"
+        ))
+        .trim()
+        .parse()
+        .expect("ans");
+        assert_eq!(Sum::from_json(&ans).expect("sum"), Sum(6));
+        let empty_arr: Json = "[]".parse().expect("arr");
+        assert_eq!(
+            IntList::from_json(&empty_arr),
+            Err(JsonError::ExpectedObject)
+        );
+        assert_eq!(
+            IntList::from_json(&Json::object(Vec::new()).expect("obj")),
+            Err(JsonError::MissingField)
+        );
+        assert_eq!(
+            IntList::from_json(
+                &Json::object(vec![
+                    ("v".into(), Json::Array(Vec::new())),
+                    ("x".into(), Json::Null),
+                ])
+                .expect("extra")
+            ),
+            Err(JsonError::ExtraField)
+        );
+        assert_eq!(
+            IntList::from_json(&Json::object(vec![("v".into(), Json::int(1))]).expect("v")),
+            Err(JsonError::ExpectedArray)
+        );
+        assert_eq!(
+            IntList::from_json(
+                &Json::object(vec![("v".into(), Json::Array(vec![Json::Bool(true)]))]).expect("v")
+            ),
+            Err(JsonError::ExpectedInt)
+        );
+        let huge: Json = "{\"$i\":\"999999999999999999999\"}".parse().expect("huge");
+        assert_eq!(Sum::from_json(&huge), Err(JsonError::IntRange));
+        assert_eq!(Sum::from_json(&Json::Null), Err(JsonError::ExpectedInt));
+        assert_eq!(
+            IntList::from_json(
+                &Json::object(vec![("v".into(), Json::Array(vec![huge]),)]).expect("v")
+            ),
+            Err(JsonError::IntRange)
+        );
     }
 
     #[test]

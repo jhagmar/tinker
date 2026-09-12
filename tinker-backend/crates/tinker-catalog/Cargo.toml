@@ -1,6 +1,6 @@
 [package]
 name = "tinker-catalog"
-description = "Problem trait, generate, reference solve, and judge"
+description = "Problem trait, JSON data model, generate, reference solve, and judge"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

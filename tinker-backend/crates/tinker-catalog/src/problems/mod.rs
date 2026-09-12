@@ -11,6 +11,8 @@ pub fn entries() -> &'static [ProblemEntry] {
     ENTRIES
 }
 
+pub use int_sum::{IntList, IntSum, Sum};
+
 #[cfg(test)]
 mod tests {
     use super::*;
