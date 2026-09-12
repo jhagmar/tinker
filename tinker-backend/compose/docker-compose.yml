@@ -1,0 +1,7 @@
+name: tinker
+
+# Slice 1 skeleton. Later slices add the host image, Docker-in-Docker, and the judge.
+services:
+  backend:
+    image: alpine:3.22
+    command: ["true"]

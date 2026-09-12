@@ -1,0 +1,27 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/tinker",
+    "crates/tinker-protocol",
+    "crates/tinker-catalog",
+    "crates/tinker-agent",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+license = "MIT"
+repository = "https://github.com/jhagmar/tinker"
+homepage = "https://github.com/jhagmar/tinker"
+authors = ["Jonas Hagmar <jonas.hagmar@protonmail.com>"]
+publish = false
+
+[workspace.dependencies]
+tinker-agent = { path = "crates/tinker-agent", version = "0.1.0" }
+tinker-catalog = { path = "crates/tinker-catalog", version = "0.1.0" }
+tinker-protocol = { path = "crates/tinker-protocol", version = "0.1.0" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"

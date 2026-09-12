@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+title: Tinker
+message: If you use Tinker, please cite it as below.
+type: software
+authors:
+  - family-names: Hagmar
+    given-names: Jonas
+    email: jonas.hagmar@protonmail.com
+repository-code: https://github.com/jhagmar/tinker
+license: MIT
+abstract: Tinker is an operator-run coding workshop with Mixtrapi session channels, a Rust host, and language-agnostic problems.

@@ -1,0 +1,19 @@
+[package]
+name = "tinker"
+description = "Tinker host: listeners, admission, catalog compile, sandbox orchestration"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+tinker-agent.workspace = true
+tinker-catalog.workspace = true
+tinker-protocol.workspace = true
+
+[lints]
+workspace = true

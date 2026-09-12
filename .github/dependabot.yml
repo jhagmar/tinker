@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /tinker-backend
+    schedule:
+      interval: weekly
+    groups:
+      crates:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /tinker-backend/compose
+    schedule:
+      interval: weekly

@@ -1,0 +1,15 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 100%
+        threshold: 0%
+    patch:
+      default:
+        target: 100%
+        threshold: 0%
+ignore:
+  - 'tinker-backend/scripts/**'
+  - 'tinker-backend/crates/tinker/src/main.rs'
+comment:
+  require_changes: true

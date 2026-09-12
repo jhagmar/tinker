@@ -1,0 +1,13 @@
+.DS_Store
+.idea/
+*.swp
+.env
+.env.*
+!.env.example
+target/
+coverage/
+*.lcov
+lcov.info
+.nyc_output/
+node_modules/
+dist/

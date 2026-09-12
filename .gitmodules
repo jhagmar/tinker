@@ -1,0 +1,3 @@
+[submodule "mixtrapi"]
+	path = mixtrapi
+	url = https://github.com/jhagmar/mixtrapi.git

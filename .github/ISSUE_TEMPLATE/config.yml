@@ -1,0 +1,7 @@
+# Community health files
+
+blank_issues_enabled: true
+contact_links:
+  - name: Mixtrapi spec
+    url: https://github.com/jhagmar/mixtrapi/blob/master/docs/spec.md
+    about: Wire protocol contract (submodule mixtrapi)
