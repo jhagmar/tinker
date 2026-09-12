@@ -1,10 +1,12 @@
 //! Host binary for Tinker workshops.
 
 mod cli;
+mod codegen;
 mod compile;
 mod sampler;
 
 pub use cli::{ColorMode, run};
+pub use codegen::write_http_js;
 pub use compile::{CargoCompiler, CatalogCompiler, CompileError};
 
 /// Package version from Cargo.toml.
@@ -23,6 +25,12 @@ pub fn protocol_id() -> &'static str {
 #[must_use]
 pub fn catalog_dir() -> &'static str {
     tinker_catalog::CATALOG_DIR
+}
+
+/// Generated HTTP helpers directory name beside the host workspace.
+#[must_use]
+pub fn generated_dir() -> &'static str {
+    tinker_protocol::GENERATED_DIR
 }
 
 /// Protocol id of the workspace agent copied into language images.
@@ -50,5 +58,21 @@ mod tests {
         assert_eq!(protocol_id(), "mixtrapi/1");
         assert_eq!(agent_protocol_id(), protocol_id());
         assert_eq!(catalog_dir(), "catalog");
+        assert_eq!(generated_dir(), "generated");
+    }
+
+    #[test]
+    fn login_body_debug_omits_payload() {
+        let pw = std::env::args().next().expect("argv0");
+        assert!(!pw.is_empty());
+        let login = tinker_protocol::LoginBody::new(&pw).expect("pw");
+        assert_eq!(login.password(), pw.as_str());
+        let dbg = format!("{login:?}");
+        assert!(dbg.contains("<redacted>"));
+        assert!(!dbg.contains(&pw));
+        assert_eq!(
+            tinker_protocol::LoginBody::new(&pw[..0]),
+            Err(tinker_protocol::LoginError::Empty)
+        );
     }
 }

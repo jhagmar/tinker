@@ -1,7 +1,9 @@
-//! CLI integration tests for `tinker verify`.
+//! CLI integration tests for `tinker verify` and `tinker codegen`.
 
+use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 fn catalog_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -38,4 +40,33 @@ fn help_exits_0() {
         .expect("run tinker");
     assert_eq!(out.status.code(), Some(0));
     assert!(String::from_utf8_lossy(&out.stdout).contains("verify"));
+    assert!(String::from_utf8_lossy(&out.stdout).contains("codegen"));
+}
+
+#[test]
+fn codegen_writes_http_js() {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("time")
+        .as_nanos();
+    let dir =
+        std::env::temp_dir().join(format!("tinker-int-codegen-{}-{nanos}", std::process::id()));
+    fs::create_dir_all(&dir).expect("scratch");
+    let path = dir.join("tinker-http.js");
+    let exe = env!("CARGO_BIN_EXE_tinker");
+    let out = Command::new(exe)
+        .args(["codegen", path.to_str().expect("utf8 path")])
+        .output()
+        .expect("run tinker");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stdout={stdout} stderr={stderr}"
+    );
+    let text = fs::read_to_string(&path).expect("js");
+    for name in ["apply", "approve", "languages", "problems", "login"] {
+        assert!(text.contains(&format!("export function {name}(")), "{name}");
+    }
 }

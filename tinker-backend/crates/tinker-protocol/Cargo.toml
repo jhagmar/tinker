@@ -1,6 +1,6 @@
 [package]
 name = "tinker-protocol"
-description = "Mixtrapi HTTP and session frame types for the Tinker host"
+description = "HTTP JSON types and tinker-http.js codegen input"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
