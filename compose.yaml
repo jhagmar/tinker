@@ -1,0 +1,44 @@
+# Local GitHub CI and CodeQL. From this directory, with Docker running:
+#
+#   docker compose run --rm ci
+#   docker compose run --rm codeql
+#
+# The workshop stack is tinker-backend/compose/docker-compose.yml.
+
+name: tinker-ci
+
+services:
+  ci:
+    build:
+      context: .
+      dockerfile: ci/Dockerfile
+      target: ci
+    working_dir: /src
+    volumes:
+      - .:/src
+      - ci-cargo-registry:/opt/cargo/registry
+      - ci-cargo-git:/opt/cargo/git
+      - ci-target:/opt/target
+    command: ["/src/ci/ci.sh"]
+
+  codeql:
+    build:
+      context: .
+      dockerfile: ci/Dockerfile
+      target: codeql
+    working_dir: /src
+    volumes:
+      - .:/src
+      - ./ci/out:/out
+      - codeql-cargo-registry:/opt/cargo/registry
+      - codeql-cargo-git:/opt/cargo/git
+      - codeql-target:/opt/target
+    command: ["/src/ci/codeql.sh"]
+
+volumes:
+  ci-cargo-registry:
+  ci-cargo-git:
+  ci-target:
+  codeql-cargo-registry:
+  codeql-cargo-git:
+  codeql-target:

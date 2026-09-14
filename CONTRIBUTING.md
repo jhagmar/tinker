@@ -25,6 +25,15 @@ cargo run -p tinker -- verify all 100
 
 CI runs those commands. Line coverage on measured crates is 100%.
 
+With Docker running, from the repository root:
+
+```bash
+docker compose run --rm ci
+docker compose run --rm codeql
+```
+
+`ci` matches `.github/workflows/ci.yml` (format, Clippy, layering, deny, tests, Python kit, HTTP JavaScript, 100% llvm-cov). `codeql` matches `.github/workflows/codeql.yml` and writes `ci/out/codeql.sarif`. The workshop stack stays in `tinker-backend/compose/docker-compose.yml`.
+
 `crates/tinker/src/main.rs` is the process entry: environment, stdout/stderr, and `tinker::run`. Codecov omits that file; review it by reading it. Domain crates (`tinker-protocol`, `tinker-catalog`, `tinker-agent`) have no crates.io dependencies.
 
 The Mixtrapi contract is the `mixtrapi/` submodule.
