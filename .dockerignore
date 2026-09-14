@@ -1,0 +1,5 @@
+# The runner image installs tools only. The tree is bind-mounted at run.
+*
+!ci
+!ci/Dockerfile
+ci/out
