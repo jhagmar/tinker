@@ -67,6 +67,14 @@ hex_id!(
     "Internal access-request id (16 bytes, lowercase hex)."
 );
 hex_id!(SessionId, "Session id (16 bytes, lowercase hex).");
+hex_id!(
+    UserId,
+    "Opaque user id minted at approve (16 bytes, lowercase hex)."
+);
+hex_id!(
+    WorkspaceId,
+    "Opaque workspace id minted at approve (16 bytes, lowercase hex)."
+);
 
 /// Wait token: 32 bytes, unpadded base64url (43 characters).
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -141,11 +149,8 @@ impl Jwt {
     ///
     /// Returns [`JwtError::Form`] when there are not three non-empty segments.
     pub fn new(raw: &str) -> Result<Self, JwtError> {
-        let mut parts = raw.split('.');
-        let a = parts.next().ok_or(JwtError::Form)?;
-        let b = parts.next().ok_or(JwtError::Form)?;
-        let c = parts.next().ok_or(JwtError::Form)?;
-        if parts.next().is_some() || a.is_empty() || b.is_empty() || c.is_empty() {
+        let parts: Vec<&str> = raw.split('.').collect();
+        if parts.len() != 3 || parts.iter().any(|p| p.is_empty()) {
             return Err(JwtError::Form);
         }
         Ok(Self(raw.to_owned()))
@@ -234,6 +239,8 @@ mod tests {
         assert_eq!(id.to_string(), ok);
         let sid = SessionId::new(ok).expect("sid");
         assert_eq!(sid.as_str(), ok);
+        assert_eq!(UserId::new(ok).expect("u").to_string(), ok);
+        assert_eq!(WorkspaceId::new(ok).expect("w").to_string(), ok);
         assert_eq!(RequestId::new("short"), Err(HexIdError::Length));
         assert_eq!(RequestId::new(&"g".repeat(32)), Err(HexIdError::Charset));
         assert_eq!(RequestId::new(&"A".repeat(32)), Err(HexIdError::Charset));

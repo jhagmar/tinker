@@ -30,6 +30,10 @@ With Docker running, from this directory: `docker compose run --rm ci` and `dock
 
 From `tinker-backend/`, `cargo run -p tinker -- verify all 100` compiles `catalog/` and samples every problem. Set `TINKER_CATALOG_DIR` when the process working directory is not the workspace root. `cargo run -p tinker -- codegen generated/tinker-http.js` writes the HTTP JavaScript helpers.
 
+`tinker hash-password` prints an argon2id hash (`$argon2id$v=19$…`) from a TTY prompt or `--password-file`. `tinker orchestrate` binds the public and admin listeners. It refuses to start without `TINKER_ADMIN_PASSWORD_HASH` (or `_FILE`, or TOML `admin_password_hash`) and `TINKER_JWT_HS256_SECRET` (or `_FILE`, or TOML `jwt_hs256_secret`). Listen addresses default to `0.0.0.0:8080` and `127.0.0.1:8081`. Pass `--config path.toml` or set `TINKER_PUBLIC_LISTEN` / `TINKER_ADMIN_LISTEN`. A plaintext admin password field is a config error.
+
+After start, `POST /v1/access-requests` on the public port, `POST /v1/login` then `POST /v1/access-requests/{id}/approve` on the admin port, and the waiter receives a JWT with `session_id`, `user_id`, and `workspace_id`.
+
 ## Layout
 
 | Path | Role |

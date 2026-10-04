@@ -2,7 +2,7 @@
 
 use core::fmt;
 
-use crate::id::{DisplayName, DisplayNameError, Jwt, RequestId, SessionId};
+use crate::id::{DisplayName, DisplayNameError, Jwt, RequestId, SessionId, UserId, WorkspaceId};
 
 /// Default session TTL (seconds).
 pub const DEFAULT_TTL_SECONDS: u32 = 3600;
@@ -12,6 +12,9 @@ pub const MAX_TTL_SECONDS: u32 = 604_800;
 
 /// Pending apply TTL (seconds).
 pub const PENDING_TTL_SECONDS: u32 = 900;
+
+/// Git retention when persist is set (seconds).
+pub const PERSISTENT_TTL_SECONDS: u32 = 604_800;
 
 /// Which listener a route is served on.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -534,6 +537,12 @@ pub struct Decision {
     pub jwt: Option<Jwt>,
     /// Session id when approved.
     pub session_id: Option<SessionId>,
+    /// User id when approved.
+    pub user_id: Option<UserId>,
+    /// Workspace id when approved.
+    pub workspace_id: Option<WorkspaceId>,
+    /// Resume token when persist/retention is set (wait-token principal only).
+    pub resume_token: Option<crate::id::WaitToken>,
     /// Session expiry when approved.
     pub expires_at: Option<u64>,
     /// Session WebSocket URL when approved.
@@ -595,6 +604,10 @@ impl fmt::Display for DecisionStatusError {
 pub struct ApproveBody {
     /// TTL override; `None` means [`DEFAULT_TTL_SECONDS`].
     pub ttl_seconds: Option<u32>,
+    /// Select [`PERSISTENT_TTL_SECONDS`] for git retention.
+    pub persist: bool,
+    /// Override persist default; `1..=PERSISTENT_TTL_SECONDS`.
+    pub retention_seconds: Option<u32>,
 }
 
 /// Why [`ApproveBody::new`] failed.
@@ -611,21 +624,43 @@ impl fmt::Display for TtlError {
 }
 
 impl ApproveBody {
-    /// `ttl_seconds` null or `1..=MaxTtlSeconds`.
+    /// `ttl_seconds` null or `1..=MaxTtlSeconds`. Persist off, no retention override.
     ///
     /// # Errors
     ///
     /// Returns [`TtlError::Range`] when `ttl_seconds` is `Some(0)` or above the max.
     pub fn new(ttl_seconds: Option<u32>) -> Result<Self, TtlError> {
+        Self::full(ttl_seconds, false, None)
+    }
+
+    /// Full approve body. `retention_seconds` is `1..=PersistentTtlSeconds` when set.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TtlError::Range`] when a TTL field is `Some(0)` or above its max.
+    pub fn full(
+        ttl_seconds: Option<u32>,
+        persist: bool,
+        retention_seconds: Option<u32>,
+    ) -> Result<Self, TtlError> {
         if let Some(ttl) = ttl_seconds
             && (ttl == 0 || ttl > MAX_TTL_SECONDS)
         {
             return Err(TtlError::Range);
         }
-        Ok(Self { ttl_seconds })
+        if let Some(ret) = retention_seconds
+            && (ret == 0 || ret > PERSISTENT_TTL_SECONDS)
+        {
+            return Err(TtlError::Range);
+        }
+        Ok(Self {
+            ttl_seconds,
+            persist,
+            retention_seconds,
+        })
     }
 
-    /// Effective TTL.
+    /// Effective session JWT TTL.
     #[must_use]
     pub fn effective_ttl(self) -> u32 {
         self.ttl_seconds.unwrap_or(DEFAULT_TTL_SECONDS)
@@ -883,10 +918,14 @@ mod tests {
             status: DecisionStatus::Approved,
             jwt: Some(Jwt::new("a.b.c").expect("j")),
             session_id: Some(SessionId::new(HEX).expect("s")),
+            user_id: Some(UserId::new(HEX).expect("u")),
+            workspace_id: Some(WorkspaceId::new(HEX).expect("w")),
+            resume_token: None,
             expires_at: Some(3),
             ws_url: Some("/v1/sessions/x/channel".into()),
         };
         assert!(d.jwt.is_some());
+        assert!(d.user_id.is_some());
     }
 
     #[test]
@@ -922,5 +961,15 @@ mod tests {
         };
         assert_eq!(sess.expiry, 9);
         assert_eq!(PENDING_TTL_SECONDS, 900);
+        assert_eq!(PERSISTENT_TTL_SECONDS, MAX_TTL_SECONDS);
+        assert!(ApproveBody::full(None, true, Some(60)).expect("p").persist);
+        assert_eq!(
+            ApproveBody::full(None, false, Some(0)),
+            Err(TtlError::Range)
+        );
+        assert_eq!(
+            ApproveBody::full(None, false, Some(PERSISTENT_TTL_SECONDS + 1)),
+            Err(TtlError::Range)
+        );
     }
 }

@@ -12,11 +12,12 @@ pub use http::{
     DEFAULT_TTL_SECONDS, Decision, DecisionStatus, DecisionStatusError, EnabledBody, ErrorBody,
     ErrorCode, ErrorCodeError, ExtendBody, HTTP_ROUTES, HttpRoute, Language, LanguageError,
     LanguageId, LanguageIdError, Listener, LoginBody, LoginError, MAX_TTL_SECONDS,
-    PENDING_TTL_SECONDS, ProblemSummary, ProblemSummaryError, SessionRow, TtlError,
+    PENDING_TTL_SECONDS, PERSISTENT_TTL_SECONDS, ProblemSummary, ProblemSummaryError, SessionRow,
+    TtlError,
 };
 pub use id::{
-    DisplayName, DisplayNameError, HexIdError, Jwt, JwtError, RequestId, SessionId, WaitToken,
-    WaitTokenError,
+    DisplayName, DisplayNameError, HexIdError, Jwt, JwtError, RequestId, SessionId, UserId,
+    WaitToken, WaitTokenError, WorkspaceId,
 };
 pub use js::javascript_module;
 
