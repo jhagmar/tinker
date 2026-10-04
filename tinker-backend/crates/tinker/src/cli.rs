@@ -428,6 +428,7 @@ fn parse_orchestrate(rest: &[&str], config: Option<&str>) -> Result<Action, Pars
 mod tests {
     use super::*;
     use crate::compile::CompileError;
+    use crate::orchestrate::test_password;
 
     struct OkCompiler;
 
@@ -448,10 +449,10 @@ mod tests {
         }
     }
 
-    struct Prompt(&'static str);
+    struct Prompt(String);
     impl HiddenInput for Prompt {
         fn read_password(&mut self) -> Result<String, String> {
-            Ok(self.0.to_owned())
+            Ok(self.0.clone())
         }
     }
 
@@ -471,7 +472,7 @@ mod tests {
             args,
             compiler,
             no_color,
-            &mut Prompt("secret"),
+            &mut Prompt(test_password()),
             &HashMap::new(),
         )
     }
@@ -601,7 +602,7 @@ mod tests {
                 catalog_dir: Path::new("/unused"),
                 no_color: false,
                 compiler: &OkCompiler,
-                hidden: &mut Prompt("x"),
+                hidden: &mut Prompt(test_password()),
                 env: &HashMap::new(),
                 shutdown: Shutdown::Immediate,
             },
@@ -719,7 +720,7 @@ mod tests {
             &["tinker", "hash-password"],
             &OkCompiler,
             false,
-            &mut Prompt(""),
+            &mut Prompt(String::new()),
             &HashMap::new(),
         );
         assert_eq!(c, 1);
@@ -733,7 +734,7 @@ mod tests {
             std::env::temp_dir().join(format!("tinker-cli-hp-{}-{nanos}", std::process::id()));
         fs::create_dir_all(&dir).expect("d");
         let file = dir.join("pw");
-        fs::write(&file, "from-file\n").expect("w");
+        fs::write(&file, format!("{}\n", test_password())).expect("w");
         let path = file.to_str().expect("utf8");
         let (c, out, err) = run_args(
             &["tinker", "--password-file", path, "hash-password"],
@@ -785,7 +786,7 @@ mod tests {
         let dir =
             std::env::temp_dir().join(format!("tinker-cli-or-{}-{nanos}", std::process::id()));
         fs::create_dir_all(&dir).expect("d");
-        let hash = hash_password("pw").expect("h");
+        let hash = hash_password(&test_password()).expect("h");
         let toml = dir.join("tinker.toml");
         fs::write(
             &toml,
@@ -833,7 +834,7 @@ mod tests {
             &["tinker", "orchestrate"],
             &OkCompiler,
             false,
-            &mut Prompt("x"),
+            &mut Prompt(test_password()),
             &env,
         );
         assert_eq!(c, 0, "err={err}");
@@ -844,7 +845,7 @@ mod tests {
             &["tinker", "orchestrate"],
             &OkCompiler,
             false,
-            &mut Prompt("x"),
+            &mut Prompt(test_password()),
             &env,
         );
         assert_eq!(c, 1);
