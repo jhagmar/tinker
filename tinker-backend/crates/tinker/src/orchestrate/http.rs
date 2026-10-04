@@ -575,7 +575,7 @@ fn opt_str(s: Option<&str>) -> String {
 mod tests {
     use super::*;
     use crate::orchestrate::admission::{Clock, Entropy};
-    use crate::orchestrate::password::hash_password;
+    use crate::orchestrate::password::{hash_password, test_other_password, test_password};
     use futures_util::StreamExt;
     use std::sync::{Arc as StdArc, Mutex};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -625,6 +625,10 @@ mod tests {
             pending_ttl_seconds: 900,
             revoke_deny_file: dir.join("deny"),
         }
+    }
+
+    fn login_json(password: &str) -> Vec<u8> {
+        format!(r#"{{"password":"{password}"}}"#).into_bytes()
     }
 
     async fn raw_http(
@@ -739,7 +743,7 @@ mod tests {
     #[tokio::test]
     async fn bind_failures() {
         let dir = scratch();
-        let hash = hash_password("pw").expect("h");
+        let hash = hash_password(&test_password()).expect("h");
         let mut c = cfg(hash.clone(), &dir);
         c.public_listen = "255.255.255.255:1".parse().expect("p");
         let adm = StdArc::new(
@@ -759,7 +763,7 @@ mod tests {
     #[tokio::test]
     async fn oneshot_unknown_addr_and_https_cookie() {
         let dir = scratch();
-        let hash = hash_password("pw").expect("h");
+        let hash = hash_password(&test_password()).expect("h");
         let c = cfg(hash, &dir);
         let adm = StdArc::new(
             Admission::new(
@@ -791,7 +795,7 @@ mod tests {
                     .uri("/v1/login")
                     .header(header::CONTENT_TYPE, "application/json")
                     .header("x-forwarded-proto", "https")
-                    .body(Body::from("{\"password\":\"pw\"}"))
+                    .body(Body::from(login_json(&test_password())))
                     .expect("req"),
             )
             .await
@@ -808,7 +812,7 @@ mod tests {
     #[tokio::test]
     async fn apply_login_approve_wait() {
         let dir = scratch();
-        let hash = hash_password("pw").expect("h");
+        let hash = hash_password(&test_password()).expect("h");
         let c = cfg(hash, &dir);
         let adm = StdArc::new(
             Admission::new(
@@ -895,25 +899,21 @@ mod tests {
         assert_eq!(code, 401);
         let (code, _, _) = raw_http(admin, "POST", "/v1/login", &[], Some(b"{}")).await;
         assert_eq!(code, 400);
-        let (code, _, _) =
-            raw_http(admin, "POST", "/v1/login", &[], Some(br#"{"password":""}"#)).await;
+        let empty = String::new();
+        let empty_login = login_json(&empty);
+        let (code, _, _) = raw_http(admin, "POST", "/v1/login", &[], Some(&empty_login)).await;
         assert_eq!(code, 400);
-        let (code, _, _) = raw_http(
-            admin,
-            "POST",
-            "/v1/login",
-            &[],
-            Some(br#"{"password":"wrong"}"#),
-        )
-        .await;
+        let wrong_login = login_json(&test_other_password());
+        let (code, _, _) = raw_http(admin, "POST", "/v1/login", &[], Some(&wrong_login)).await;
         assert_eq!(code, 401);
 
+        let ok_login = login_json(&test_password());
         let (code, head, _) = raw_http(
             admin,
             "POST",
             "/v1/login",
             &[("X-Forwarded-Proto", "https")],
-            Some(br#"{"password":"pw"}"#),
+            Some(&ok_login),
         )
         .await;
         assert_eq!(code, 200);
@@ -1120,7 +1120,7 @@ mod tests {
     #[tokio::test]
     async fn large_body_and_rate_limit() {
         let dir = scratch();
-        let hash = hash_password("pw").expect("h");
+        let hash = hash_password(&test_password()).expect("h");
         let c = cfg(hash, &dir);
         let adm = StdArc::new(
             Admission::new(
@@ -1167,7 +1167,7 @@ mod tests {
     #[tokio::test]
     async fn remaining_error_branches() {
         let dir = scratch();
-        let hash = hash_password("pw").expect("h");
+        let hash = hash_password(&test_password()).expect("h");
         let c = cfg(hash, &dir);
         let adm = StdArc::new(
             Admission::new(
@@ -1214,14 +1214,8 @@ mod tests {
         assert_eq!(code, 400);
         let (code, _, _) = raw_http(admin, "POST", "/v1/login", &[], None).await;
         assert_eq!(code, 400);
-        let (code, head, _) = raw_http(
-            admin,
-            "POST",
-            "/v1/login",
-            &[],
-            Some(br#"{"password":"pw"}"#),
-        )
-        .await;
+        let ok_login = login_json(&test_password());
+        let (code, head, _) = raw_http(admin, "POST", "/v1/login", &[], Some(&ok_login)).await;
         assert_eq!(code, 200);
         let cookie = cookie_pair(&head);
 

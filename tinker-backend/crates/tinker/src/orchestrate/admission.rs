@@ -615,7 +615,7 @@ pub fn clear_cookie(https: bool) -> String {
 mod tests {
     use super::*;
     use crate::orchestrate::config::Config;
-    use crate::orchestrate::password::hash_password;
+    use crate::orchestrate::password::{hash_password, test_other_password, test_password};
     use std::sync::Mutex as StdMutex;
     use std::time::{SystemTime, UNIX_EPOCH};
     use tinker_protocol::ApproveBody;
@@ -664,7 +664,7 @@ mod tests {
 
     fn adm(clock: u64) -> Admission {
         let dir = scratch();
-        let hash = hash_password("op-pass").expect("h");
+        let hash = hash_password(&test_password()).expect("h");
         Admission::new(
             cfg(&dir, &hash),
             Box::new(FixedClock(StdMutex::new(clock))),
@@ -731,7 +731,7 @@ mod tests {
             }
         }
         let dir = scratch();
-        let hash = hash_password("op-pass").expect("h");
+        let hash = hash_password(&test_password()).expect("h");
         let b = Admission::new(
             cfg(&dir, &hash),
             Box::new(Shared(clock.clone())),
@@ -756,7 +756,7 @@ mod tests {
         let over = ApproveBody::new(Some(60)).expect("t");
         // max is 604800; 60 is fine. Force over via config max 10:
         let dir = scratch();
-        let hash = hash_password("op-pass").expect("h");
+        let hash = hash_password(&test_password()).expect("h");
         let mut c = cfg(&dir, &hash);
         c.max_ttl_seconds = 10;
         let c_adm = Admission::new(
@@ -784,8 +784,8 @@ mod tests {
         let a = adm(5_000);
         assert!(!a.admin_ok(None));
         assert!(!a.admin_ok(Some("nope")));
-        assert!(a.login("wrong", "9.9.9.9", false).is_err());
-        let tok = a.login("op-pass", "9.9.9.9", true).expect("ok");
+        assert!(a.login(&test_other_password(), "9.9.9.9", false).is_err());
+        let tok = a.login(&test_password(), "9.9.9.9", true).expect("ok");
         assert!(a.admin_ok(Some(&tok)));
         a.logout(Some(&tok));
         assert!(!a.admin_ok(Some(&tok)));
@@ -805,17 +805,17 @@ mod tests {
         assert_eq!(Admission::cookie_name(), "tinker_admin");
 
         for i in 0..5 {
-            let _ = a.login("bad", "8.8.8.8", false);
+            let _ = a.login(&test_other_password(), "8.8.8.8", false);
             let _ = i;
         }
         assert_eq!(
-            a.login("op-pass", "8.8.8.8", false),
+            a.login(&test_password(), "8.8.8.8", false),
             Err(AdmitError::RateLimited)
         );
 
         let dir = scratch();
         let deny = dir.join("nested").join("deny");
-        let hash = hash_password("op-pass").expect("h");
+        let hash = hash_password(&test_password()).expect("h");
         let mut c = cfg(&dir, &hash);
         c.revoke_deny_file = deny.clone();
         std::fs::create_dir_all(deny.parent().expect("parent")).expect("nested");
@@ -924,7 +924,7 @@ mod tests {
             }
         }
         let dir = scratch();
-        let hash = hash_password("op-pass").expect("h");
+        let hash = hash_password(&test_password()).expect("h");
         let a = Admission::new(
             cfg(&dir, &hash),
             Box::new(Shared(clock.clone())),
@@ -951,14 +951,16 @@ mod tests {
             .expect("hour reset");
 
         for _ in 0..5 {
-            let _ = a.login("bad", "7.7.7.7", false);
+            let _ = a.login(&test_other_password(), "7.7.7.7", false);
         }
         assert_eq!(
-            a.login("op-pass", "7.7.7.7", false),
+            a.login(&test_password(), "7.7.7.7", false),
             Err(AdmitError::RateLimited)
         );
         *clock.lock().expect("c") = 20_000 + 3600 + 60;
-        let tok = a.login("op-pass", "7.7.7.7", false).expect("after minute");
+        let tok = a
+            .login(&test_password(), "7.7.7.7", false)
+            .expect("after minute");
         assert!(a.admin_ok(Some(&tok)));
         *clock.lock().expect("c") = 20_000 + 3600 + 60 + 8 * 3600 + 1;
         assert!(!a.admin_ok(Some(&tok)));

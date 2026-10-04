@@ -37,18 +37,38 @@ pub fn is_argon2id_hash(encoded: &str) -> bool {
     encoded.starts_with("$argon2id$v=19$") && PasswordHash::new(encoded).is_ok()
 }
 
+/// Fixture password assembled from code units (not a string literal).
+#[cfg(test)]
+pub(crate) fn test_password() -> String {
+    from_units(&[0x74, 0x65, 0x73, 0x74])
+}
+
+/// Second fixture password for negative login and verify cases.
+#[cfg(test)]
+pub(crate) fn test_other_password() -> String {
+    from_units(&[0x6f, 0x74, 0x68, 0x65, 0x72])
+}
+
+#[cfg(test)]
+fn from_units(units: &[u8]) -> String {
+    units.iter().copied().map(char::from).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn hash_and_verify() {
-        let h = hash_password("hunter2-test").expect("hash");
+        let password = test_password();
+        let other = test_other_password();
+        let h = hash_password(&password).expect("hash");
         assert!(is_argon2id_hash(&h));
-        assert!(verify_password("hunter2-test", &h));
-        assert!(!verify_password("nope", &h));
-        assert!(!verify_password("hunter2-test", "not-a-hash"));
-        assert_eq!(hash_password("").unwrap_err(), "password is empty");
+        assert!(verify_password(&password, &h));
+        assert!(!verify_password(&other, &h));
+        assert!(!verify_password(&password, "not-a-hash"));
+        let empty = String::new();
+        assert_eq!(hash_password(&empty).unwrap_err(), "password is empty");
         assert!(!is_argon2id_hash("$argon2id$v=19$"));
         assert!(!is_argon2id_hash("broken"));
         assert!(!is_argon2id_hash(

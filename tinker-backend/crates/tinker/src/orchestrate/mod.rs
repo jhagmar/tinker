@@ -10,6 +10,9 @@ pub use config::{Config, load};
 pub use http::Running;
 pub use password::hash_password;
 
+#[cfg(test)]
+pub(crate) use password::test_password;
+
 use std::sync::Arc;
 
 #[cfg(test)]
@@ -73,7 +76,7 @@ pub async fn wait_shutdown(shutdown: Shutdown) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::orchestrate::password::hash_password;
+    use crate::orchestrate::password::{hash_password, test_password};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn scratch() -> std::path::PathBuf {
@@ -89,7 +92,7 @@ mod tests {
     #[tokio::test]
     async fn bind_logs_and_immediate_shutdown() {
         let dir = scratch();
-        let hash = hash_password("pw").expect("h");
+        let hash = hash_password(&test_password()).expect("h");
         let cfg = Config {
             public_listen: "127.0.0.1:0".parse().expect("p"),
             admin_listen: "127.0.0.1:0".parse().expect("a"),
@@ -112,7 +115,7 @@ mod tests {
     #[tokio::test]
     async fn bind_fails_when_denylist_parent_is_a_file() {
         let dir = scratch();
-        let hash = hash_password("pw").expect("h");
+        let hash = hash_password(&test_password()).expect("h");
         let parent = dir.join("not-dir");
         std::fs::write(&parent, b"x").expect("file");
         let cfg = Config {
@@ -169,7 +172,7 @@ mod tests {
         Config {
             public_listen: "127.0.0.1:0".parse().expect("p"),
             admin_listen: "127.0.0.1:0".parse().expect("a"),
-            admin_password_hash: hash_password("pw").expect("h"),
+            admin_password_hash: hash_password(&test_password()).expect("h"),
             jwt_hs256_secret: b"orch-secret".to_vec(),
             default_ttl_seconds: 3600,
             max_ttl_seconds: 604_800,

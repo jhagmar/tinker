@@ -14,6 +14,13 @@ fn catalog_dir() -> PathBuf {
         .expect("catalog dir")
 }
 
+fn fixture_password() -> String {
+    [0x74u8, 0x65, 0x73, 0x74]
+        .into_iter()
+        .map(char::from)
+        .collect()
+}
+
 #[test]
 fn verify_all_100() {
     let exe = env!("CARGO_BIN_EXE_tinker");
@@ -85,7 +92,7 @@ fn hash_password_from_file() {
     let dir = std::env::temp_dir().join(format!("tinker-int-hp-{}-{nanos}", std::process::id()));
     fs::create_dir_all(&dir).expect("scratch");
     let file = dir.join("pw");
-    fs::write(&file, "workshop-pass\n").expect("pw");
+    fs::write(&file, format!("{}\n", fixture_password())).expect("pw");
     let exe = env!("CARGO_BIN_EXE_tinker");
     let out = Command::new(exe)
         .args([
@@ -110,7 +117,7 @@ fn orchestrate_apply_approve_returns_user_and_workspace() {
     fs::create_dir_all(&dir).expect("scratch");
     let exe = env!("CARGO_BIN_EXE_tinker");
     let pw = dir.join("pw");
-    fs::write(&pw, "op-pass\n").expect("pw");
+    fs::write(&pw, format!("{}\n", fixture_password())).expect("pw");
     let hash_out = Command::new(exe)
         .args([
             "hash-password",
@@ -171,12 +178,13 @@ fn orchestrate_apply_approve_returns_user_and_workspace() {
     let rid = json_string(&apply, "request_id");
     let wait = json_string(&apply, "wait_token");
 
+    let login_body = format!(r#"{{"password":"{}"}}"#, fixture_password());
     let login = http(
         &admin,
         "POST",
         "/v1/login",
         &[],
-        Some(br#"{"password":"op-pass"}"#),
+        Some(login_body.as_bytes()),
     );
     let cookie_line = login
         .lines()

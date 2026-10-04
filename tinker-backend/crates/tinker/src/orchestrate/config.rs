@@ -221,7 +221,7 @@ fn u32_val(table: &toml::Table, key: &str, default: u32) -> Result<u32, ConfigEr
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::orchestrate::password::hash_password;
+    use crate::orchestrate::password::{hash_password, test_password};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn scratch() -> PathBuf {
@@ -237,7 +237,7 @@ mod tests {
     #[test]
     fn load_env_and_files() {
         let dir = scratch();
-        let hash = hash_password("cfg-secret").expect("h");
+        let hash = hash_password(&test_password()).expect("h");
         let hash_file = dir.join("hash");
         fs::write(&hash_file, format!("{hash}\n")).expect("hash file");
         let secret_file = dir.join("jwt");
@@ -296,7 +296,7 @@ mod tests {
         assert_eq!(load(None, &env), Err(ConfigError::AdminHash));
         env.insert(
             "TINKER_ADMIN_PASSWORD_HASH".into(),
-            hash_password("z").expect("h"),
+            hash_password(&test_password()).expect("h"),
         );
         assert_eq!(load(None, &env), Err(ConfigError::JwtSecret));
         env.insert("TINKER_JWT_HS256_SECRET".into(), String::new());
@@ -319,7 +319,7 @@ mod tests {
             load(Some(&missing), &HashMap::new()),
             Err(ConfigError::Io(_))
         ));
-        let hash = hash_password("z").expect("h");
+        let hash = hash_password(&test_password()).expect("h");
         fs::write(
             &p,
             format!(
@@ -340,7 +340,7 @@ mod tests {
     #[test]
     fn nested_keys_and_ttl() {
         let dir = scratch();
-        let hash = hash_password("n").expect("h");
+        let hash = hash_password(&test_password()).expect("h");
         let p = dir.join("n.toml");
         fs::write(
             &p,
