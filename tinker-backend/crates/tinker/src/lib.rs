@@ -3,11 +3,13 @@
 mod cli;
 mod codegen;
 mod compile;
+mod orchestrate;
 mod sampler;
 
-pub use cli::{ColorMode, run};
+pub use cli::{ColorMode, HiddenInput, RunInput, run};
 pub use codegen::write_http_js;
 pub use compile::{CargoCompiler, CatalogCompiler, CompileError};
+pub use orchestrate::Shutdown;
 
 /// Package version from Cargo.toml.
 #[must_use]

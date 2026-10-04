@@ -1,5 +1,6 @@
-//! Hand-rolled CLI: `tinker verify`, help, version, `--color`.
+//! Hand-rolled CLI: `tinker verify`, `hash-password`, `orchestrate`, help, version, `--color`.
 
+use std::collections::HashMap;
 use std::ffi::OsString;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -8,6 +9,7 @@ use tinker_catalog::{ProblemId, ProblemIdError, Selector, entries, verify};
 
 use crate::codegen::write_http_js;
 use crate::compile::CatalogCompiler;
+use crate::orchestrate::{self, Shutdown};
 use crate::sampler::{SplitMix64, VERIFY_SEED};
 use crate::version;
 
@@ -17,12 +19,44 @@ Usage: tinker [options] <command>
 Commands:
   verify <all|id[,id...]> <n>  Sample n instances per selected problem
   codegen [path]               Write generated/tinker-http.js (or path)
+  hash-password                Print an argon2id hash (TTY or --password-file)
+  orchestrate                  Bind public and admin listeners
 
 Options:
-  -h, --help            Show this help
-  -V, --version         Show version
-      --color <when>    auto, always, or never
+  -h, --help                   Show this help
+  -V, --version                Show version
+      --color <when>           auto, always, or never
+      --password-file <path>   Password file for hash-password
+      --config <path>          TOML config for orchestrate
 ";
+
+/// Reads a password with echo off (TTY). Tests inject a stub.
+pub trait HiddenInput {
+    /// Read one password line.
+    ///
+    /// # Errors
+    ///
+    /// Returns a message when the prompt fails.
+    fn read_password(&mut self) -> Result<String, String>;
+}
+
+/// Process arguments for [`run`].
+pub struct RunInput<'a> {
+    /// Argv including argv0.
+    pub args: &'a [OsString],
+    /// Catalog directory for `verify`.
+    pub catalog_dir: &'a Path,
+    /// Whether `NO_COLOR` is set.
+    pub no_color: bool,
+    /// Catalog compiler.
+    pub compiler: &'a dyn CatalogCompiler,
+    /// Password prompt.
+    pub hidden: &'a mut dyn HiddenInput,
+    /// Environment map used by `orchestrate`.
+    pub env: &'a HashMap<String, String>,
+    /// Orchestrate shutdown mode.
+    pub shutdown: Shutdown,
+}
 
 /// Selects cargo's `CARGO_TERM_COLOR` for catalog compile.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -65,6 +99,12 @@ enum Action {
     Codegen {
         path: PathBuf,
     },
+    HashPassword {
+        file: Option<PathBuf>,
+    },
+    Orchestrate {
+        config: Option<PathBuf>,
+    },
 }
 
 enum ParseErr {
@@ -72,14 +112,16 @@ enum ParseErr {
 }
 
 /// Parse args and run. Returns a process exit code (0, 1, or 2).
-pub fn run(
-    args: &[OsString],
-    catalog_dir: &Path,
-    no_color: bool,
-    compiler: &dyn CatalogCompiler,
-    stdout: &mut dyn Write,
-    stderr: &mut dyn Write,
-) -> i32 {
+pub fn run(input: RunInput<'_>, stdout: &mut dyn Write, stderr: &mut dyn Write) -> i32 {
+    let RunInput {
+        args,
+        catalog_dir,
+        no_color,
+        compiler,
+        hidden,
+        env,
+        shutdown,
+    } = input;
     match parse(args) {
         Err(ParseErr::Usage(msg)) => {
             let _ = writeln!(stderr, "{msg}");
@@ -124,7 +166,81 @@ pub fn run(
                 1
             }
         },
+        Ok(Action::HashPassword { file }) => {
+            hash_password_cmd(file.as_deref(), hidden, stdout, stderr)
+        }
+        Ok(Action::Orchestrate { config }) => {
+            orchestrate_cmd(config.as_deref(), env, stdout, stderr, shutdown)
+        }
     }
+}
+
+fn hash_password_cmd(
+    file: Option<&Path>,
+    hidden: &mut dyn HiddenInput,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+) -> i32 {
+    let password = match file {
+        Some(path) => match std::fs::read_to_string(path) {
+            Ok(s) => s.trim_end_matches(['\n', '\r']).to_owned(),
+            Err(e) => {
+                let _ = writeln!(stderr, "{e}");
+                return 1;
+            }
+        },
+        None => match hidden.read_password() {
+            Ok(s) => s,
+            Err(e) => {
+                let _ = writeln!(stderr, "{e}");
+                return 1;
+            }
+        },
+    };
+    match orchestrate::hash_password(&password) {
+        Ok(h) => {
+            let _ = writeln!(stdout, "{h}");
+            0
+        }
+        Err(e) => {
+            let _ = writeln!(stderr, "{e}");
+            1
+        }
+    }
+}
+
+fn orchestrate_cmd(
+    config: Option<&Path>,
+    env: &HashMap<String, String>,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+    shutdown: Shutdown,
+) -> i32 {
+    let cfg = match orchestrate::load(config, env) {
+        Ok(c) => c,
+        Err(e) => {
+            let _ = writeln!(stderr, "{e}");
+            return 1;
+        }
+    };
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("tokio runtime");
+    let running = match rt.block_on(orchestrate::bind(cfg)) {
+        Ok(r) => r,
+        Err(e) => {
+            let _ = writeln!(stderr, "{e}");
+            return 1;
+        }
+    };
+    let _ = writeln!(stdout, "public {}", running.public);
+    let _ = writeln!(stdout, "admin {}", running.admin);
+    rt.block_on(async move {
+        orchestrate::wait_shutdown(shutdown).await;
+        running.shutdown().await;
+    });
+    0
 }
 
 fn parse(args: &[OsString]) -> Result<Action, ParseErr> {
@@ -139,6 +255,8 @@ fn parse(args: &[OsString]) -> Result<Action, ParseErr> {
         tokens.push(s);
     }
     let mut color = ColorMode::Auto;
+    let mut password_file = None;
+    let mut config = None;
     let mut positionals = Vec::new();
     let mut i = 0;
     while i < tokens.len() {
@@ -163,6 +281,36 @@ fn parse(args: &[OsString]) -> Result<Action, ParseErr> {
             i += 1;
             continue;
         }
+        if t == "--password-file" {
+            i += 1;
+            let Some(v) = tokens.get(i) else {
+                return Err(ParseErr::Usage(
+                    "missing value for --password-file".to_owned(),
+                ));
+            };
+            password_file = Some(*v);
+            i += 1;
+            continue;
+        }
+        if let Some(v) = t.strip_prefix("--password-file=") {
+            password_file = Some(v);
+            i += 1;
+            continue;
+        }
+        if t == "--config" {
+            i += 1;
+            let Some(v) = tokens.get(i) else {
+                return Err(ParseErr::Usage("missing value for --config".to_owned()));
+            };
+            config = Some(*v);
+            i += 1;
+            continue;
+        }
+        if let Some(v) = t.strip_prefix("--config=") {
+            config = Some(v);
+            i += 1;
+            continue;
+        }
         if t.starts_with('-') {
             return Err(ParseErr::Usage(format!("unknown option {t}")));
         }
@@ -175,6 +323,8 @@ fn parse(args: &[OsString]) -> Result<Action, ParseErr> {
     match positionals[0] {
         "verify" => parse_verify(&positionals[1..], color),
         "codegen" => parse_codegen(&positionals[1..]),
+        "hash-password" => parse_hash_password(&positionals[1..], password_file),
+        "orchestrate" => parse_orchestrate(&positionals[1..], config),
         other => Err(ParseErr::Usage(format!("unknown command {other}"))),
     }
 }
@@ -252,6 +402,28 @@ fn parse_codegen(rest: &[&str]) -> Result<Action, ParseErr> {
     Ok(Action::Codegen { path })
 }
 
+fn parse_hash_password(rest: &[&str], file: Option<&str>) -> Result<Action, ParseErr> {
+    if !rest.is_empty() {
+        return Err(ParseErr::Usage(
+            "hash-password takes no positional arguments".to_owned(),
+        ));
+    }
+    Ok(Action::HashPassword {
+        file: file.map(PathBuf::from),
+    })
+}
+
+fn parse_orchestrate(rest: &[&str], config: Option<&str>) -> Result<Action, ParseErr> {
+    if !rest.is_empty() {
+        return Err(ParseErr::Usage(
+            "orchestrate takes no positional arguments".to_owned(),
+        ));
+    }
+    Ok(Action::Orchestrate {
+        config: config.map(PathBuf::from),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -276,19 +448,54 @@ mod tests {
         }
     }
 
+    struct Prompt(&'static str);
+    impl HiddenInput for Prompt {
+        fn read_password(&mut self) -> Result<String, String> {
+            Ok(self.0.to_owned())
+        }
+    }
+
+    struct FailPrompt;
+    impl HiddenInput for FailPrompt {
+        fn read_password(&mut self) -> Result<String, String> {
+            Err("no tty".into())
+        }
+    }
+
     fn run_args(
         args: &[&str],
         compiler: &dyn CatalogCompiler,
         no_color: bool,
     ) -> (i32, String, String) {
+        run_args_full(
+            args,
+            compiler,
+            no_color,
+            &mut Prompt("secret"),
+            &HashMap::new(),
+        )
+    }
+
+    fn run_args_full(
+        args: &[&str],
+        compiler: &dyn CatalogCompiler,
+        no_color: bool,
+        hidden: &mut dyn HiddenInput,
+        env: &HashMap<String, String>,
+    ) -> (i32, String, String) {
         let os: Vec<OsString> = args.iter().map(|s| OsString::from(*s)).collect();
         let mut out = Vec::new();
         let mut err = Vec::new();
         let code = run(
-            &os,
-            Path::new("/unused-catalog"),
-            no_color,
-            compiler,
+            RunInput {
+                args: &os,
+                catalog_dir: Path::new("/unused-catalog"),
+                no_color,
+                compiler,
+                hidden,
+                env,
+                shutdown: Shutdown::Immediate,
+            },
             &mut out,
             &mut err,
         );
@@ -321,6 +528,8 @@ mod tests {
         assert_eq!(c, 0);
         assert!(out.contains("verify"));
         assert!(out.contains("codegen"));
+        assert!(out.contains("hash-password"));
+        assert!(out.contains("orchestrate"));
         let (c, out, _) = run_args(&["tinker", "--version"], &OkCompiler, false);
         assert_eq!(c, 0);
         assert_eq!(out.trim(), version());
@@ -363,6 +572,13 @@ mod tests {
                 "invalid --color",
             ),
             (&["tinker", "codegen", "a", "b"], "at most one path"),
+            (&["tinker", "hash-password", "x"], "no positional"),
+            (&["tinker", "orchestrate", "x"], "no positional"),
+            (
+                &["tinker", "--password-file"],
+                "missing value for --password-file",
+            ),
+            (&["tinker", "--config"], "missing value for --config"),
         ];
         for (args, needle) in cases {
             let (c, _, err) = run_args(args, &OkCompiler, false);
@@ -380,10 +596,15 @@ mod tests {
         let mut out = Vec::new();
         let mut err = Vec::new();
         let code = run(
-            &args,
-            Path::new("/unused"),
-            false,
-            &OkCompiler,
+            RunInput {
+                args: &args,
+                catalog_dir: Path::new("/unused"),
+                no_color: false,
+                compiler: &OkCompiler,
+                hidden: &mut Prompt("x"),
+                env: &HashMap::new(),
+                shutdown: Shutdown::Immediate,
+            },
             &mut out,
             &mut err,
         );
@@ -475,5 +696,158 @@ mod tests {
         assert!(path.is_file());
         let _ = fs::remove_file(&path);
         let _ = fs::remove_dir(tinker_protocol::GENERATED_DIR);
+    }
+
+    #[test]
+    fn hash_password_prompt_file_and_errors() {
+        use std::fs;
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let (c, out, err) = run_args(&["tinker", "hash-password"], &OkCompiler, false);
+        assert_eq!(c, 0, "err={err}");
+        assert!(out.contains("$argon2id$v=19$"));
+        let (c, _, err) = run_args_full(
+            &["tinker", "hash-password"],
+            &OkCompiler,
+            false,
+            &mut FailPrompt,
+            &HashMap::new(),
+        );
+        assert_eq!(c, 1);
+        assert!(err.contains("no tty"));
+        let (c, _, err) = run_args_full(
+            &["tinker", "hash-password"],
+            &OkCompiler,
+            false,
+            &mut Prompt(""),
+            &HashMap::new(),
+        );
+        assert_eq!(c, 1);
+        assert!(err.contains("empty"));
+
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("t")
+            .as_nanos();
+        let dir =
+            std::env::temp_dir().join(format!("tinker-cli-hp-{}-{nanos}", std::process::id()));
+        fs::create_dir_all(&dir).expect("d");
+        let file = dir.join("pw");
+        fs::write(&file, "from-file\n").expect("w");
+        let path = file.to_str().expect("utf8");
+        let (c, out, err) = run_args(
+            &["tinker", "--password-file", path, "hash-password"],
+            &OkCompiler,
+            false,
+        );
+        assert_eq!(c, 0, "err={err}");
+        assert!(out.contains("$argon2id$"));
+        let (c, out, _) = run_args(
+            &[
+                "tinker",
+                &format!("--password-file={path}"),
+                "hash-password",
+            ],
+            &OkCompiler,
+            false,
+        );
+        assert_eq!(c, 0);
+        assert!(out.contains("$argon2id$"));
+        let missing = dir.join("missing");
+        let (c, _, err) = run_args(
+            &[
+                "tinker",
+                "--password-file",
+                missing.to_str().expect("u"),
+                "hash-password",
+            ],
+            &OkCompiler,
+            false,
+        );
+        assert_eq!(c, 1);
+        assert!(!err.is_empty());
+    }
+
+    #[test]
+    fn orchestrate_refuses_without_secrets_and_binds() {
+        use crate::orchestrate::hash_password;
+        use std::fs;
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let (c, _, err) = run_args(&["tinker", "orchestrate"], &OkCompiler, false);
+        assert_eq!(c, 1);
+        assert!(err.contains("hash") || err.contains("JWT") || err.contains("password"));
+
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("t")
+            .as_nanos();
+        let dir =
+            std::env::temp_dir().join(format!("tinker-cli-or-{}-{nanos}", std::process::id()));
+        fs::create_dir_all(&dir).expect("d");
+        let hash = hash_password("pw").expect("h");
+        let toml = dir.join("tinker.toml");
+        fs::write(
+            &toml,
+            format!(
+                "public_listen = \"127.0.0.1:0\"\nadmin_listen = \"127.0.0.1:0\"\nadmin_password_hash = \"{hash}\"\njwt_hs256_secret = \"cli-secret\"\nrevoke_deny_file = \"{}\"\n",
+                dir.join("deny").display()
+            ),
+        )
+        .expect("w");
+        let (c, out, err) = run_args(
+            &[
+                "tinker",
+                "--config",
+                toml.to_str().expect("u"),
+                "orchestrate",
+            ],
+            &OkCompiler,
+            false,
+        );
+        assert_eq!(c, 0, "err={err}");
+        assert!(out.contains("public 127.0.0.1:"), "{out}");
+        assert!(out.contains("admin 127.0.0.1:"), "{out}");
+        assert!(!out.contains("cli-secret"));
+        let (c, out, err) = run_args(
+            &[
+                "tinker",
+                &format!("--config={}", toml.display()),
+                "orchestrate",
+            ],
+            &OkCompiler,
+            false,
+        );
+        assert_eq!(c, 0, "err={err} out={out}");
+
+        let mut env = HashMap::new();
+        env.insert("TINKER_ADMIN_PASSWORD_HASH".into(), hash);
+        env.insert("TINKER_JWT_HS256_SECRET".into(), "env-secret".into());
+        env.insert("TINKER_PUBLIC_LISTEN".into(), "127.0.0.1:0".into());
+        env.insert("TINKER_ADMIN_LISTEN".into(), "127.0.0.1:0".into());
+        env.insert(
+            "TINKER_REVOKE_DENY_FILE".into(),
+            dir.join("deny2").display().to_string(),
+        );
+        let (c, out, err) = run_args_full(
+            &["tinker", "orchestrate"],
+            &OkCompiler,
+            false,
+            &mut Prompt("x"),
+            &env,
+        );
+        assert_eq!(c, 0, "err={err}");
+        assert!(out.contains("public "));
+
+        env.insert("TINKER_PUBLIC_LISTEN".into(), "255.255.255.255:1".into());
+        let (c, _, err) = run_args_full(
+            &["tinker", "orchestrate"],
+            &OkCompiler,
+            false,
+            &mut Prompt("x"),
+            &env,
+        );
+        assert_eq!(c, 1);
+        assert!(!err.is_empty());
     }
 }

@@ -18,6 +18,8 @@
 /**
  * @typedef {object} ApproveBody
  * @property {number|null} [ttl_seconds]
+ * @property {boolean} [persist]
+ * @property {number|null} [retention_seconds]
  */
 
 /**
@@ -39,6 +41,18 @@
  * @typedef {object} ErrorBody
  * @property {string} error
  * @property {string} message
+ */
+
+/**
+ * @typedef {object} Decision
+ * @property {string} status
+ * @property {string|null} jwt
+ * @property {string|null} session_id
+ * @property {string|null} user_id
+ * @property {string|null} workspace_id
+ * @property {string|null} resume_token
+ * @property {number|null} expires_at
+ * @property {string|null} ws_url
  */
 
 export const errorCodes = [

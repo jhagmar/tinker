@@ -92,6 +92,8 @@ const TYPEDEFS: &str = "\
 /**
  * @typedef {object} ApproveBody
  * @property {number|null} [ttl_seconds]
+ * @property {boolean} [persist]
+ * @property {number|null} [retention_seconds]
  */
 
 /**
@@ -113,6 +115,18 @@ const TYPEDEFS: &str = "\
  * @typedef {object} ErrorBody
  * @property {string} error
  * @property {string} message
+ */
+
+/**
+ * @typedef {object} Decision
+ * @property {string} status
+ * @property {string|null} jwt
+ * @property {string|null} session_id
+ * @property {string|null} user_id
+ * @property {string|null} workspace_id
+ * @property {string|null} resume_token
+ * @property {number|null} expires_at
+ * @property {string|null} ws_url
  */
 
 ";
@@ -369,6 +383,9 @@ mod tests {
         assert!(js.contains("listener: 'public'"));
         assert!(js.contains("listener: 'admin'"));
         assert!(js.contains("joinUrl"));
+        assert!(js.contains("@typedef {object} Decision"));
+        assert!(js.contains("user_id"));
+        assert!(js.contains("workspace_id"));
         assert!(!js.contains("eval("));
     }
 }

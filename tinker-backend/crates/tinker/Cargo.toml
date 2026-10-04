@@ -11,9 +11,25 @@ authors.workspace = true
 publish.workspace = true
 
 [dependencies]
+argon2 = { version = "0.5", default-features = false, features = ["alloc", "password-hash", "rand", "std"] }
+axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio", "ws"] }
+base64 = "0.22"
+getrandom = "0.2"
+hmac = "0.12"
+rpassword = "7"
+serde_json = "1"
+sha2 = "0.10"
+subtle = "2"
 tinker-agent.workspace = true
 tinker-catalog.workspace = true
 tinker-protocol.workspace = true
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "sync", "time", "signal", "io-util"] }
+toml = { version = "0.8", default-features = false, features = ["parse"] }
+
+[dev-dependencies]
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+tokio-tungstenite = { version = "0.29", default-features = false, features = ["connect"] }
+tower = { version = "0.5", default-features = false, features = ["util"] }
 
 [lints]
 workspace = true
